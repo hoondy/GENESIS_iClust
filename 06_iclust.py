@@ -36,6 +36,8 @@ parser.add_argument('--input', help='Input h5ad file', required=True)
 parser.add_argument('--output', help='Output h5ad file', required=True)
 parser.add_argument('--prefix', help='prefix', required=True)
 parser.add_argument('--batch', help='batch', required=False, default='Source')
+parser.add_argument('--iclust_hvfs', help='List of highly variable features for class, subclass, subtype', nargs="+", type=int, required=False, default=[3000,2000,1000])
+parser.add_argument('--iclust_res', help='List of Leiden clustering resolutions for class, subclass, subtype', nargs="+", type=int, required=False, default=[0.1,0.2,0.3])
 
 args = parser.parse_args()
 
@@ -392,8 +394,8 @@ iclust(input = args.input,
        output = args.output,
        prefix = args.prefix,
        args_iclust_levels = ['class','subclass','subtype'],
-       args_iclust_hvfs = [3000,2000,1000],
-       args_iclust_res = [0.1,0.2,0.3],
+       args_iclust_hvfs = args.iclust_hvfs,
+       args_iclust_res = args.iclust_res,
        args_harmony_batch = args.batch)
 gc.collect()
 
