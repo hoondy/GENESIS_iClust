@@ -313,7 +313,7 @@ subset_obs = (adata.obs['subtype'].isin(anno.subtype.tolist())).tolist()
 
 # run ondisk_subset
 _ondisk_subset(orig_h5ad = args.input,
-               new_h5ad = args.input+'.subset',
+               new_h5ad = args.input.replace('.h5ad','_subset.h5ad'),
                subset_obs = subset_obs,
                chunk_size = 500000,
                raw = True)
