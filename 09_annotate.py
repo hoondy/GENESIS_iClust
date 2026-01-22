@@ -209,9 +209,12 @@ def _save(data, filename):
     data.to_anndata().write(filename)
     print('Saved',filename)
 
-def save_umap(adata, color, title, save):
+def save_umap(adata, color, title, save, pal=None):
     sc.set_figure_params(dpi=100, dpi_save=300, vector_friendly = True)
-    sc.pl.umap(adata, color=color, title=title, legend_loc='on data', frameon=False, legend_fontsize=6, legend_fontoutline=1, size=10, add_outline=True, outline_width=(0.2,0.02), show=False)
+    if pal:
+        sc.pl.umap(adata, color=color, title=title, legend_loc='on data', frameon=False, legend_fontsize=6, legend_fontoutline=2, size=1, add_outline=True, outline_width=(0.2,0.02), show=False, palette=pal)
+    else:
+        sc.pl.umap(adata, color=color, title=title, legend_loc='on data', frameon=False, legend_fontsize=6, legend_fontoutline=2, size=1, add_outline=True, outline_width=(0.2,0.02), show=False)
     plt.savefig(save, bbox_inches="tight")
 
 def _write_h5ad_with_new_annotation(orig_h5ad, adata, new_h5ad, raw = True):
@@ -293,7 +296,13 @@ def _pg_umap(args_input, args_output,
     pg.umap(data, rep='pca_regressed_harmony', n_neighbors=args_umap_n_neighbors, rep_ncomps=args_pca_n_pcs, random_state=0)
     
     ### figure
-    save_umap(adata=data.to_anndata(), color='subclass', title='subclass', save=args_output.replace('.h5ad','.png'))
+    pal = pd.read_csv('annotation/230921_PsychAD_color_palette.csv')
+    pal_class = pal[pal.category=='class']
+    pal_class = dict(zip(pal_class['name'],pal_class['color_hex']))
+    pal_subclass = pal[pal.category=='subclass']
+    pal_subclass = dict(zip(pal_subclass['name'],pal_subclass['color_hex']))
+    save_umap(adata=data.to_anndata(), color='class', title='class', save=args_output.replace('.h5ad','_class.png'), pal=pal_class)
+    save_umap(adata=data.to_anndata(), color='subclass', title='subclass', save=args_output.replace('.h5ad','_subclass.png'), pal=pal_subclass)
 
     ### save
     _save(data, args_output)
