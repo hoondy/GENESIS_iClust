@@ -40,6 +40,8 @@ parser.add_argument('--annotation', help='Annotation CSV file', required=True)
 parser.add_argument('--harmony_batch', help='Batch variable for Harmony', required=False, default='Source')
 parser.add_argument('--hvf_n_top_genes', help='Number of highly variable features for UMAP', type=int, required=False, default=6000)
 
+parser.add_argument('--palette', help='Color palette CSV file', required=True)
+
 args = parser.parse_args()
 
 ################################################################################
@@ -264,7 +266,7 @@ def _write_h5ad_with_new_annotation(orig_h5ad, adata, new_h5ad, raw = True):
                 sparse_dataset(target["raw/X"]).append(sparse_dataset(src["raw/X"]))
 
 # note, args_hvf_flavor = 'cell_ranger' throws error for rare cell populations
-def _pg_umap(args_input, args_output,
+def _pg_umap(args_input, args_output, args_pal,
              args_hvf_flavor = 'cell_ranger', args_hvf_batch = None, args_hvf_n_top_genes = None,
              args_hvf_min_mean = 0.0125, args_hvf_max_mean = 3, args_hvf_min_disp = 0.5,
              args_hvf_protein_coding = True, args_hvf_autosome = True,
@@ -296,7 +298,7 @@ def _pg_umap(args_input, args_output,
     pg.umap(data, rep='pca_regressed_harmony', n_neighbors=args_umap_n_neighbors, rep_ncomps=args_pca_n_pcs, random_state=0)
     
     ### figure
-    pal = pd.read_csv('annotation/230921_PsychAD_color_palette.csv')
+    pal = pd.read_csv(args_pal)
     pal_class = pal[pal.category=='class']
     pal_class = dict(zip(pal_class['name'],pal_class['color_hex']))
     pal_subclass = pal[pal.category=='subclass']
@@ -340,6 +342,7 @@ _write_h5ad_with_new_annotation(args.input.replace('.h5ad','_subset.h5ad'), adat
 # umap
 _pg_umap(args_input = args.input.replace('.h5ad','_subset_anno.h5ad'),
          args_output = args.output,
+         args_pal = args.palette,
          args_hvf_flavor = 'cell_ranger', args_hvf_batch = None, args_hvf_n_top_genes = args.hvf_n_top_genes,
          args_hvf_protein_coding = True, args_hvf_autosome = True,
          args_pca_n_pcs = 30,
