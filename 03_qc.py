@@ -54,14 +54,11 @@ def qc(input, output, prefix, args_mad_k = 3, args_pct_mito = 5, args_min_n_cell
     data = pg.read_input(input, file_type='h5ad', genome='GRCh38', modality='rna')
     
     ### create channel
-    if 'participant_id' in data.obs:
-        data.obs['Channel'] = data.obs.participant_id
+    if 'libraryID' in data.obs:
+        data.obs['Channel'] = data.obs.libraryID
     else:
         data.obs['Channel'] = data.obs.individualID
-    
-    ### create Source
-    if prefix=='GEN_A1':
-        data.obs['Source'] = ['RADC' if x.startswith('R') else x.split('_')[1] for x in data.obs.individualID]
+        print('WARNING: libraryID is missing. individualID is used as Channel.')
     
     ##################
     ### QC by gene ###
