@@ -97,9 +97,6 @@ def qc(input, output, prefix, args_mad_k = 3, args_pct_mito = 5, args_min_n_cell
     ####################
     
     pg.qc_metrics(data, mito_prefix='MT-')
-
-    print(args_mad_k)
-    print(args_mad_k*1)
     
     ### nUMI and nGene QCs
     n_counts_lower, n_counts_upper = _qc_boundary(data.obs.n_counts, k=args_mad_k)
