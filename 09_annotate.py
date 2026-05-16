@@ -117,23 +117,23 @@ subset_obs = (adata.obs['subtype'].isin(anno.subtype.tolist())).tolist()
 
 # run ondisk_subset
 sct.io.ondisk_subset(orig_h5ad = args.input,
-                     new_h5ad = args.input.replace('.h5ad','_subset.h5ad'),
+                     new_h5ad = args.input.replace('.h5ad','.h5ad.tmp1'),
                      subset_obs = subset_obs,
                      chunk_size = 500000,
                      raw = True)
 
 # add annotation
-adata = sct.io.read_everything_but_X(args.input.replace('.h5ad','_subset.h5ad'))
+adata = sct.io.read_everything_but_X(args.input.replace('.h5ad','.h5ad.tmp1'))
 subtype2class = dict(zip(anno['subtype'],anno['class']))
 subtype2subclass = dict(zip(anno['subtype'],anno['subclass']))
 adata.obs['class'] = [subtype2class[x] for x in adata.obs.subtype]
 adata.obs['subclass'] = [subtype2subclass[x] for x in adata.obs.subtype]
 
 # replace annotation
-sct.io.write_h5ad_with_new_annotation(args.input.replace('.h5ad','_subset.h5ad'), adata, args.input.replace('.h5ad','_subset_anno.h5ad'), raw = True)
+sct.io.write_h5ad_with_new_annotation(args.input.replace('.h5ad','.h5ad.tmp1'), adata, args.input.replace('.h5ad','.h5ad.tmp2'), raw = True)
 
 # umap
-_pg_umap(args_input = args.input.replace('.h5ad','_subset_anno.h5ad'),
+_pg_umap(args_input = args.input.replace('.h5ad','.h5ad.tmp2'),
          args_output = args.output,
          args_pal = args.palette,
          args_hvf_flavor = 'cell_ranger', args_hvf_batch = None, args_hvf_n_top_genes = args.hvf_n_top_genes,
@@ -143,6 +143,10 @@ _pg_umap(args_input = args.input.replace('.h5ad','_subset_anno.h5ad'),
          args_harmony_batch = args.harmony_batch,
          args_knn_K = 100,
          args_umap_n_neighbors = 15)
+
+# remove temp files
+os.remove(args.input.replace('.h5ad','.h5ad.tmp1'))
+os.remove(args.input.replace('.h5ad','.h5ad.tmp2'))
 
 ################################################################################
 
