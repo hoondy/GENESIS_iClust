@@ -1,34 +1,31 @@
 #!/usr/bin/env python
+"""
+Step 08 - Remove clusters before the next clustering pass.
+
+Drops every cell whose obs[--cluster] label (e.g. subtype '7_1_1') is listed
+in --exclude, a text file with one label per line, such as a doublet or
+low-quality cluster found by reviewing pass 2. The subset is made on disk,
+with raw.X kept.
+
+Snakemake: TEST_pass3.smk, rule `subset`
+"""
 
 # sc
-import pegasus as pg
-import scanpy as sc
-import anndata as ad
 import SCTools as sct
 
-# plotting
-import matplotlib.pyplot as plt
-from matplotlib.pyplot import rc_context
-import seaborn as sns
-
-# data
-import numpy as np
-import pandas as pd
-from scipy import stats, sparse
-import h5py
-
 # sys
-import gc
-import os
+import importlib
 import sys
-from pathlib import Path
 
 # etc
 import argparse
 
+# shared pipeline helpers (file name starts with a digit, so no plain `import`)
+shared = importlib.import_module('00_shared')
+
 ################################################################################
 
-parser = argparse.ArgumentParser(description='pegasus end2end wrapper script')
+parser = argparse.ArgumentParser(description='Step 08: remove listed clusters (on disk)')
 
 parser.add_argument('--input', help='Input h5ad file', required=True)
 parser.add_argument('--output', help='Output h5ad file', required=True)
@@ -52,7 +49,7 @@ subset_obs = (~adata.obs[args.cluster].isin(list_exclude)).tolist()
 sct.io.ondisk_subset(orig_h5ad = args.input,
                      new_h5ad = args.output,
                      subset_obs = subset_obs,
-                     chunk_size = 500000,
+                     chunk_size = shared.ONDISK_CHUNK_SIZE,
                      raw = True)
 
 ################################################################################

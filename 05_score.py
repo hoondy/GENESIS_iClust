@@ -1,36 +1,42 @@
 #!/usr/bin/env python
+"""
+Step 05 - QC metrics and Pegasus gene-signature scores.
+
+Adds obs columns:
+    n_genes, n_counts, percent_mito, passed_qc
+        pg.qc_metrics
+    G1/S, G2/M, cycle_diff, cycling, predicted_phase
+        cell_cycle_human (Tirosh et al. 2016, https://science.sciencemag.org/content/352/6282/189)
+    female_score, male_score, gender_score, predicted_gender
+        gender_human
+    mito_genes, mito_ribo
+        mitochondrial_genes_human: the 13 chrM genes, and mitochondrial
+        ribosomal genes that are not on chrM
+    ribo_genes
+        ribosomal_genes_human
+    apoptosis
+        apoptosis_human
+Pegasus skips a signature when too few of its genes are present.
+
+cycle_diff is later regressed out of the PCs (00_shared.REGRESS_VARS).
+
+Snakemake: TEST_pass2.smk, rule `signature_score`
+"""
 
 # sc
 import pegasus as pg
-import scanpy as sc
-import anndata as ad
-from anndata.experimental import read_elem, write_elem, sparse_dataset
-# from anndata.experimental import read_elem, write_elem
-# from anndata._core.sparse_dataset import SparseDataset
-
-# plotting
-import matplotlib.pyplot as plt
-from matplotlib.pyplot import rc_context
-import seaborn as sns
-
-# data
-import numpy as np
-import pandas as pd
-from scipy import stats, sparse
-import h5py
+import SCTools as sct
 
 # sys
 import gc
-import os
 import sys
-from pathlib import Path
 
 # etc
 import argparse
 
 ################################################################################
 
-parser = argparse.ArgumentParser(description='pegasus end2end wrapper script')
+parser = argparse.ArgumentParser(description='Step 05: QC metrics and gene-signature scores')
 
 parser.add_argument('--input', help='Input h5ad file', required=True)
 parser.add_argument('--output', help='Output h5ad file', required=True)
@@ -40,16 +46,14 @@ args = parser.parse_args()
 ################################################################################
 
 def sig_score(input, output):
-    
+    """Add QC metrics and signature scores to obs (see module docstring)."""
+
     data = pg.read_input(input)
-    
+
     pg.qc_metrics(data, mito_prefix="MT-")
-    
-    pg.calc_signature_score(data, 'cell_cycle_human', random_state=0) ## 'cycle_diff', 'cycling', 'G1/S', 'G2/M' ## cell cycle gene score based on [Tirosh et al. 2015 | https://science.sciencemag.org/content/352/6282/189]
-    pg.calc_signature_score(data, 'gender_human', random_state=0) # female_score, male_score
-    pg.calc_signature_score(data, 'mitochondrial_genes_human', random_state=0) # 'mito_genes' contains 13 mitocondrial genes from chrM and 'mito_ribo' contains mitocondrial ribosomal genes that are not from chrM
-    pg.calc_signature_score(data, 'ribosomal_genes_human', random_state=0) # ribo_genes
-    pg.calc_signature_score(data, 'apoptosis_human', random_state=0) # apoptosis
+
+    # cell_cycle, gender, mitochondrial, ribosomal and apoptosis scores (pegasus default random_state=0)
+    sct.pp.calc_sig_scores(data)
 
     data.to_anndata().write(output, compression='gzip')
 

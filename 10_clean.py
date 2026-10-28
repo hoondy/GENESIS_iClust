@@ -1,34 +1,43 @@
 #!/usr/bin/env python
+"""
+Step 10 - Remove lineage-mixed cells and embedding outliers (release step 2 of 3).
+
+    1. sct.tl.detect_lineage_mixing flags cells whose raw counts look like a
+       mixture of subclass profiles from different classes, such as
+       heterotypic doublets or ambient contamination -> obs['mixing_flag'].
+       OPC and Oligo count as one lineage, because transitions between them
+       are real.
+    2. sct.tl.detect_outliers runs LOF per subclass in the Harmony embedding
+       on the remaining cells -> obs['outlier'].
+    3. Cells with mixing_flag == 0 and outlier == 0 are written to --output
+       (subset on disk).
+
+The input is opened backed, so counts are streamed from raw.X instead of
+being loaded into memory, and UMAPs are drawn with save_umap(backed=True).
+UMAPs of the removed and the kept cells are written to:
+    <input>_{class,subclass}_mixed.png, <input>_{class,subclass}_outlier.png
+    <output>_{class,subclass}.png
+
+Snakemake: TEST_rc2.smk, rule `clean`
+"""
 
 # sc
-import pegasus as pg
-import scanpy as sc
 import anndata as ad
 import SCTools as sct
 
-# plotting
-import matplotlib.pyplot as plt
-from matplotlib.pyplot import rc_context
-import seaborn as sns
-
-# data
-import numpy as np
-import pandas as pd
-from scipy import stats, sparse
-import h5py
-
 # sys
-import gc
-import os
+import importlib
 import sys
-from pathlib import Path
 
 # etc
 import argparse
 
+# shared pipeline helpers (file name starts with a digit, so no plain `import`)
+shared = importlib.import_module('00_shared')
+
 ################################################################################
 
-parser = argparse.ArgumentParser(description='pegasus end2end wrapper script')
+parser = argparse.ArgumentParser(description='Step 10: remove lineage-mixed cells and outliers')
 
 parser.add_argument('--input', help='Input h5ad file', required=True)
 parser.add_argument('--output', help='Output h5ad file', required=True)
@@ -39,23 +48,8 @@ args = parser.parse_args()
 
 ################################################################################
 
-def save_umap(adata, color, title, save, pal=None):
-    sc.set_figure_params(dpi=100, dpi_save=300, vector_friendly = True)
-    # plot an in-memory copy (obs columns + X_umap only): scanpy writes colors into .uns, which fails on backed views
-    cols = [color] if isinstance(color, str) else list(color)
-    plot = ad.AnnData(obs=adata.obs[cols].copy(), obsm={"X_umap": np.asarray(adata.obsm["X_umap"])})
-    sc.pl.umap(plot, color=color, title=title, legend_loc='on data', frameon=False, legend_fontsize=6, legend_fontoutline=2, size=1, add_outline=True, outline_width=(0.2,0.02), show=False, palette=pal)
-    plt.savefig(save, bbox_inches="tight")
-    plt.close("all")
-    
-################################################################################
-
 # palette
-pal = pd.read_csv(args.palette)
-pal_class = pal[pal.category=='class']
-pal_class = dict(zip(pal_class['name'],pal_class['color_hex']))
-pal_subclass = pal[pal.category=='subclass']
-pal_subclass = dict(zip(pal_subclass['name'],pal_subclass['color_hex']))
+palette = shared.load_palette(args.palette)
 
 # load
 adata = ad.read_h5ad(args.input, backed="r")   # counts are streamed from raw.X
@@ -79,26 +73,26 @@ summary = sct.tl.detect_outliers(adata[adata.obs["mixing_flag"] == 0],
 print(summary)
 
 # umap mixed lineage
-save_umap(adata[adata.obs["mixing_flag"]==1], color='class', title='class', save=args.input.replace('.h5ad','_class_mixed.png'), pal=pal_class)
-save_umap(adata[adata.obs["mixing_flag"]==1], color='subclass', title='subclass', save=args.input.replace('.h5ad','_subclass_mixed.png'), pal=pal_subclass)
+shared.save_umap(adata[adata.obs["mixing_flag"]==1], color='class', title='class', save=args.input.replace('.h5ad','_class_mixed.png'), pal=palette['class'], backed=True)
+shared.save_umap(adata[adata.obs["mixing_flag"]==1], color='subclass', title='subclass', save=args.input.replace('.h5ad','_subclass_mixed.png'), pal=palette['subclass'], backed=True)
 
 # umap outlier
-save_umap(adata[adata.obs["outlier"]==1], color='class', title='class', save=args.input.replace('.h5ad','_class_outlier.png'), pal=pal_class)
-save_umap(adata[adata.obs["outlier"]==1], color='subclass', title='subclass', save=args.input.replace('.h5ad','_subclass_outlier.png'), pal=pal_subclass)
+shared.save_umap(adata[adata.obs["outlier"]==1], color='class', title='class', save=args.input.replace('.h5ad','_class_outlier.png'), pal=palette['class'], backed=True)
+shared.save_umap(adata[adata.obs["outlier"]==1], color='subclass', title='subclass', save=args.input.replace('.h5ad','_subclass_outlier.png'), pal=palette['subclass'], backed=True)
 
 # subset criteria
-subset_obs = ((adata.obs["outlier"]==0)&(adata.obs["mixing_flag"]==0)).tolist()
+keep = (adata.obs["outlier"]==0)&(adata.obs["mixing_flag"]==0)
 
 # run ondisk_subset
 sct.io.ondisk_subset(orig_h5ad = args.input,
                      new_h5ad = args.output,
-                     subset_obs = subset_obs,
-                     chunk_size = 500000,
+                     subset_obs = keep.tolist(),
+                     chunk_size = shared.ONDISK_CHUNK_SIZE,
                      raw = True)
 
 # umap clean
-save_umap(adata[(adata.obs["outlier"]==0)&(adata.obs["mixing_flag"]==0)], color='class', title='class', save=args.output.replace('.h5ad','_class.png'), pal=pal_class)
-save_umap(adata[(adata.obs["outlier"]==0)&(adata.obs["mixing_flag"]==0)], color='subclass', title='subclass', save=args.output.replace('.h5ad','_subclass.png'), pal=pal_subclass)
+shared.save_umap(adata[keep], color='class', title='class', save=args.output.replace('.h5ad','_class.png'), pal=palette['class'], backed=True)
+shared.save_umap(adata[keep], color='subclass', title='subclass', save=args.output.replace('.h5ad','_subclass.png'), pal=palette['subclass'], backed=True)
 
 ################################################################################
 

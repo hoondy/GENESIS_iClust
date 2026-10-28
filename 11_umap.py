@@ -1,34 +1,27 @@
 #!/usr/bin/env python
+"""
+Step 11 - Final embedding of the cleaned dataset (release step 3 of 3).
 
-# sc
-import pegasus as pg
-import scanpy as sc
-import anndata as ad
-import SCTools as sct
+Re-selects HVFs and recomputes PCA/Harmony/kNN/UMAP after 10_clean.py
+removed cells, then plots class/subclass UMAPs with the GENESIS palette
+(00_shared.umap_annotated). No re-clustering is done; labels come from 09.
 
-# plotting
-import matplotlib.pyplot as plt
-from matplotlib.pyplot import rc_context
-import seaborn as sns
-
-# data
-import numpy as np
-import pandas as pd
-from scipy import stats, sparse
-import h5py
+Snakemake: TEST_rc2.smk, rule `umap`
+"""
 
 # sys
-import gc
-import os
+import importlib
 import sys
-from pathlib import Path
 
 # etc
 import argparse
 
+# shared pipeline helpers (file name starts with a digit, so no plain `import`)
+shared = importlib.import_module('00_shared')
+
 ################################################################################
 
-parser = argparse.ArgumentParser(description='pegasus end2end wrapper script')
+parser = argparse.ArgumentParser(description='Step 11: final embedding and UMAP of the cleaned dataset')
 
 parser.add_argument('--input', help='Input h5ad file', required=True)
 parser.add_argument('--output', help='Output h5ad file', required=True)
@@ -41,58 +34,13 @@ parser.add_argument('--palette', help='Color palette CSV file', required=True)
 args = parser.parse_args()
 
 ################################################################################
-                
-def save_umap(adata, color, title, save, pal=None):
-    sc.set_figure_params(dpi=100, dpi_save=300, vector_friendly = True)
-    # plot an in-memory copy (obs columns + X_umap only): scanpy writes colors into .uns, which fails on backed views
-    cols = [color] if isinstance(color, str) else list(color)
-    plot = ad.AnnData(obs=adata.obs[cols].copy(), obsm={"X_umap": np.asarray(adata.obsm["X_umap"])})
-    sc.pl.umap(plot, color=color, title=title, legend_loc='on data', frameon=False, legend_fontsize=6, legend_fontoutline=2, size=1, add_outline=True, outline_width=(0.2,0.02), show=False, palette=pal)
-    plt.savefig(save, bbox_inches="tight")
-    plt.close("all")
 
-################################################################################
-
-# palette
-pal = pd.read_csv(args.palette)
-pal_class = pal[pal.category=='class']
-pal_class = dict(zip(pal_class['name'],pal_class['color_hex']))
-pal_subclass = pal[pal.category=='subclass']
-pal_subclass = dict(zip(pal_subclass['name'],pal_subclass['color_hex']))
-
-### highly variable features
-# note, args_hvf_flavor = 'cell_ranger' throws error for rare cell populations
-hvg = sct.pp.scanpy_hvf_h5ad(h5ad_file=args.input,
-                             flavor='cell_ranger',
-                             batch_key=None,
-                             min_mean=0.0125,
-                             max_mean=3,
-                             min_disp=0.5,
-                             n_top_genes=args.hvf_n_top_genes,
-                             protein_coding=True,
-                             autosome=True)
-gc.collect()
-
-### load data
-data = pg.read_input(args.input, genome='GRCh38', modality='rna')
-data.var['highly_variable_features'] = False
-data.var.loc[data.var.index.isin(hvg),'highly_variable_features'] = True
-
-### pca/regress/harmony
-pg.pca(data, n_components=30, random_state=0)
-pg.regress_out(data, attrs=['n_counts','percent_mito','cycle_diff'])
-pg.run_harmony(data, batch=args.harmony_batch, rep='pca_regressed', max_iter_harmony=20, n_comps=30, random_state=0)
-
-### kNN/umap
-pg.neighbors(data, rep='pca_regressed_harmony', use_cache=False, dist='l2', K=100, n_comps=30, random_state=0)
-pg.umap(data, rep='pca_regressed_harmony', n_neighbors=15, rep_ncomps=30, random_state=0)
-
-### figure
-save_umap(adata=data.to_anndata(), color='class', title='class', save=args.output.replace('.h5ad','_class.png'), pal=pal_class)
-save_umap(adata=data.to_anndata(), color='subclass', title='subclass', save=args.output.replace('.h5ad','_subclass.png'), pal=pal_subclass)
-
-### save
-sct.io.save(data, args.output)
+# hvf/pca/regress/harmony/kNN/umap, figures and save
+shared.umap_annotated(input_h5ad = args.input,
+                      output_h5ad = args.output,
+                      palette_csv = args.palette,
+                      harmony_batch = args.harmony_batch,
+                      hvf_n_top_genes = args.hvf_n_top_genes)
 
 ################################################################################
 
