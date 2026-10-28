@@ -44,11 +44,12 @@ args = parser.parse_args()
                 
 def save_umap(adata, color, title, save, pal=None):
     sc.set_figure_params(dpi=100, dpi_save=300, vector_friendly = True)
-    if pal:
-        sc.pl.umap(adata, color=color, title=title, legend_loc='on data', frameon=False, legend_fontsize=6, legend_fontoutline=2, size=1, add_outline=True, outline_width=(0.2,0.02), show=False, palette=pal)
-    else:
-        sc.pl.umap(adata, color=color, title=title, legend_loc='on data', frameon=False, legend_fontsize=6, legend_fontoutline=2, size=1, add_outline=True, outline_width=(0.2,0.02), show=False)
+    # plot an in-memory copy (obs columns + X_umap only): scanpy writes colors into .uns, which fails on backed views
+    cols = [color] if isinstance(color, str) else list(color)
+    plot = ad.AnnData(obs=adata.obs[cols].copy(), obsm={"X_umap": np.asarray(adata.obsm["X_umap"])})
+    sc.pl.umap(plot, color=color, title=title, legend_loc='on data', frameon=False, legend_fontsize=6, legend_fontoutline=2, size=1, add_outline=True, outline_width=(0.2,0.02), show=False, palette=pal)
     plt.savefig(save, bbox_inches="tight")
+    plt.close("all")
 
 ################################################################################
 
