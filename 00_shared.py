@@ -25,7 +25,7 @@ must sit in the same directory as the numbered scripts.
 """
 
 # pipeline version (git tag v<__version__>)
-__version__ = '1.0.0'
+__version__ = '1.0.1'
 
 # sc
 import pegasus as pg
@@ -51,7 +51,7 @@ GENOME = 'GRCh38'
 MODALITY = 'rna'
 
 # obs covariates regressed out of the PCs before Harmony:
-# n_counts and percent_mito come from pg.qc_metrics, cycle_diff from 05_score.py.
+# n_counts and percent_mito come from raw counts in 03_qc.py, cycle_diff from 05_score.py.
 REGRESS_VARS = ['n_counts', 'percent_mito', 'cycle_diff']
 
 # Number of cells (rows) read per chunk by sct.io.ondisk_subset.

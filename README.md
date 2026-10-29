@@ -11,7 +11,7 @@ The pipeline version is `__version__` in `00_shared.py`; each release is tagged 
 | `02_anno.py` | Add Ensembl gene annotation, index genes by symbol |
 | `03_qc.py` | Gene, cell and channel QC |
 | `04_norm.py` | Shifted log1p normalisation (raw counts kept in `raw.X`) |
-| `05_score.py` | QC metrics and gene-signature scores (cell cycle, gender, ...) |
+| `05_score.py` | Gene-signature scores (cell cycle, gender, ...) |
 | `06_iclust.py` | Iterative Leiden clustering: class > subclass > subtype |
 | `07_scrublet.py` | Doublet detection and removal |
 | `08_subset.py` | Remove listed clusters |
