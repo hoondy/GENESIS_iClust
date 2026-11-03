@@ -2,11 +2,13 @@
 """
 Step 10 - Remove lineage-mixed cells and embedding outliers (release step 2 of 3).
 
-    1. sct.tl.detect_lineage_mixing flags cells whose raw counts look like a
-       mixture of subclass profiles from different classes, such as
-       heterotypic doublets or ambient contamination -> obs['mixing_flag'].
-       OPC and Oligo count as one lineage, because transitions between them
-       are real.
+    1. sct.tl.detect_lineage_mixing flags nuclei that carry RNA from a cell
+       of another class, such as doublets and nuclei with part of another
+       cell attached -> obs['mixing_flag']. A nucleus is flagged when the RNA
+       from any one other class adds up to at least a quarter of a typical
+       nucleus of that class from the same library (--mixing_threshold,
+       default 0.25; the amount is in obs['mixing_nuclei']). OPC and Oligo
+       count as one class, because transitions between them are real.
     2. sct.tl.detect_outliers runs LOF per subclass in the Harmony embedding
        on the remaining cells -> obs['outlier'].
     3. Cells with mixing_flag == 0 and outlier == 0 are written to --output
@@ -43,6 +45,7 @@ parser.add_argument('--input', help='Input h5ad file', required=True)
 parser.add_argument('--output', help='Output h5ad file', required=True)
 
 parser.add_argument('--palette', help='Color palette CSV file', required=True)
+parser.add_argument('--mixing_threshold', help='Flag cells carrying at least this many nucleus equivalents of RNA from any single other class', required=False, default=0.25, type=float)
 
 args = parser.parse_args()
 
@@ -55,10 +58,23 @@ palette = shared.load_palette(args.palette)
 adata = ad.read_h5ad(args.input, backed="r")   # counts are streamed from raw.X
 
 # lineage mixing
+# Each nucleus's raw counts are modelled as a mixture of the subclass expression profiles (EM on
+# subclass-specific marker genes). Each other class's share of the marker UMIs is then turned into
+# an amount, in nucleus equivalents: it is divided by the typical marker UMIs of that subclass
+# (median of its purest half) and by the depth factor of the nucleus's library. Subclass size and
+# library depth are fitted jointly by alternating medians, so deeply sequenced glia-rich libraries
+# do not inflate glial sizes. mixing_nuclei is the largest amount from any single other class.
+# Ambient RNA gives a few hundredths of a nucleus, nuclei with material attached from another cell
+# about 0.3-0.6, and doublets about 1; the 0.25 cutoff sits in the valley between these groups.
+# The previous rule (foreign share of marker UMIs >= 0.3) depended on the size of the host nucleus.
+# It missed large neurons carrying glial RNA and removed small clean nuclei with ordinary ambient RNA.
 sct.tl.detect_lineage_mixing(adata,
                              groupby="subclass",
                              lineage_key="class",
                              known_lineage_sets=[("OPC", "Oligo")],   # keeps real OPC to Oligo transitions
+                             library_key="Channel",                   # per-library depth and ambient pool
+                             score="nuclei",                          # amount of foreign RNA, not its share
+                             threshold=args.mixing_threshold,
                              )
 mixed = adata[adata.obs["mixing_flag"] == 1].shape[0]
 retained = adata[adata.obs["mixing_flag"] == 0].shape[0]
