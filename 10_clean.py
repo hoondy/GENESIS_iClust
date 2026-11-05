@@ -99,16 +99,16 @@ shared.save_umap(adata[adata.obs["outlier"]==1], color='subclass', title='subcla
 # subset criteria
 keep = (adata.obs["outlier"]==0)&(adata.obs["mixing_flag"]==0)
 
+# umap clean
+shared.save_umap(adata[keep], color='class', title='class', save=args.input.replace('.h5ad','_class_clean.png'), pal=palette['class'], backed=True)
+shared.save_umap(adata[keep], color='subclass', title='subclass', save=args.input.replace('.h5ad','_subclass_clean.png'), pal=palette['subclass'], backed=True)
+
 # run ondisk_subset
 sct.io.ondisk_subset(orig_h5ad = args.input,
                      new_h5ad = args.output,
                      subset_obs = keep.tolist(),
                      chunk_size = shared.ONDISK_CHUNK_SIZE,
                      raw = True)
-
-# umap clean
-shared.save_umap(adata[keep], color='class', title='class', save=args.output.replace('.h5ad','_class.png'), pal=palette['class'], backed=True)
-shared.save_umap(adata[keep], color='subclass', title='subclass', save=args.output.replace('.h5ad','_subclass.png'), pal=palette['subclass'], backed=True)
 
 ################################################################################
 
