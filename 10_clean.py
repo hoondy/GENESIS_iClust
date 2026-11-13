@@ -9,8 +9,14 @@ Step 10 - Remove lineage-mixed cells and embedding outliers (release step 2 of 3
        nucleus of that class from the same library (--mixing_threshold,
        default 0.25; the amount is in obs['mixing_nuclei']). OPC and Oligo
        count as one class, because transitions between them are real.
-    2. sct.tl.detect_outliers runs LOF per subclass in the Harmony embedding
-       on the remaining cells -> obs['outlier'].
+    2. sct.tl.detect_outliers flags, among the remaining cells, those that
+       sit among cells of another subclass: fewer than a third of their
+       nearest cells in the Harmony embedding, i.e. at most 4 of 15, share
+       their subclass (--outlier_min_agreement, default 1/3;
+       --outlier_n_neighbors, default 15) -> obs['outlier']. These are the
+       cells a UMAP draws inside another subclass's island.
+       --outlier_method lof restores the earlier rule (local outlier factor
+       per subclass), which releases up to rc2 used.
     3. Cells with mixing_flag == 0 and outlier == 0 are written to --output
        (subset on disk).
 
@@ -18,7 +24,7 @@ The input is opened backed, so counts are streamed from raw.X instead of
 being loaded into memory, and UMAPs are drawn with save_umap(backed=True).
 UMAPs of the removed and the kept cells are written to:
     <input>_{class,subclass}_mixed.png, <input>_{class,subclass}_outlier.png
-    <output>_{class,subclass}.png
+    <input>_{class,subclass}_clean.png
 
 Snakemake: TEST_rc2.smk, rule `clean`
 """
@@ -46,6 +52,9 @@ parser.add_argument('--output', help='Output h5ad file', required=True)
 
 parser.add_argument('--palette', help='Color palette CSV file', required=True)
 parser.add_argument('--mixing_threshold', help='Flag cells carrying at least this many nucleus equivalents of RNA from any single other class', required=False, default=0.25, type=float)
+parser.add_argument('--outlier_method', help='neighbor_label (default) or lof (the rule used up to rc2)', required=False, default='neighbor_label', choices=['neighbor_label', 'lof'])
+parser.add_argument('--outlier_n_neighbors', help='neighbor_label: number of nearest cells compared', required=False, default=15, type=int)
+parser.add_argument('--outlier_min_agreement', help='neighbor_label: flag cells with fewer than this share of neighbours in their own subclass', required=False, default=1/3, type=float)
 
 args = parser.parse_args()
 
@@ -80,11 +89,31 @@ mixed = adata[adata.obs["mixing_flag"] == 1].shape[0]
 retained = adata[adata.obs["mixing_flag"] == 0].shape[0]
 print('Found %i cells (%.2f %%) with mixed lineages. Retaining %i remaining cells.' % (mixed, mixed/(mixed+retained)*100, retained))
 
-# outlier detection
+# outlier detection, on the cells kept by the mixing step only: removed cells are neither scored
+# nor used as neighbours.
+# neighbor_label: exact Euclidean kNN over all kept cells in the 30 Harmony components from step 09
+# (across subclasses); a cell is an outlier when fewer than outlier_min_agreement of its
+# outlier_n_neighbors nearest cells carry its subclass. The final UMAP (step 11) places each cell
+# from its 15 nearest neighbours, so such a cell is drawn inside another subclass's island.
+# Cut 1/3 (at most 4 of 15): with no removal, nuclei at or below it ended up away from their
+# subclass in the re-embedded final UMAP more often than not; nuclei with 5-7 of 15 mostly did not.
+# The rule leaves alone small subtypes that sit apart from the rest of their subclass, because
+# their neighbours share their subclass.
+# outlier_score = share of neighbours with another subclass; outlier_neighbor_label = their most
+# common subclass.
+# lof (up to rc2): local outlier factor fitted per subclass, with k = 4% of the subclass (100-4,000)
+# and cut 1.5. Fitted within one subclass, it cannot see a cell that sits among another subclass,
+# and with such a large k it trims whole small subtypes and donor-specific states instead.
+if args.outlier_method == 'neighbor_label':
+    outlier_options = dict(method="neighbor_label",
+                           label_n_neighbors=args.outlier_n_neighbors,
+                           label_min_agreement=args.outlier_min_agreement)
+else:
+    outlier_options = dict(method="lof")
 summary = sct.tl.detect_outliers(adata[adata.obs["mixing_flag"] == 0],
                                  groupby="subclass",
                                  use_rep="X_pca_regressed_harmony",
-                                 method="lof"
+                                 **outlier_options
                                 )
 print(summary)
 
