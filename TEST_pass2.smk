@@ -29,7 +29,7 @@ rule annotation:
     output:
         os.path.join(base_path, cohort, date+'_'+cohort, cohort+'_merged_anno.h5ad')
     params:
-        anno=os.path.join(base_path, cohort, 'annotation/all_genes_EnsemblInfo_104.csv')
+        anno=os.path.join(base_path, cohort, 'annotation/all_genes_EnsemblInfo_104_1to1.csv')
     conda:
         'py312'
     shell:
